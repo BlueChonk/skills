@@ -1,4 +1,4 @@
----
+﻿---
 name: "homepage-dev"
 description: "Homepage personal site project conventions and structure guide. Invoke when modifying any file in this Vue 3 + Vite project, adding features, fixing bugs, or doing refactoring."
 ---
@@ -63,13 +63,13 @@ description: "Homepage personal site project conventions and structure guide. In
 | **MetingJS 公共 API** | `https://api.i-meto.com/meting/api` | 免费公共接口，根据歌名+歌手搜索 QQ 音乐，返回真实播放 URL、封面、歌词 |
 | **原生 Audio API** | `new Audio()` 单例 | 不依赖 Howler.js 等封装，单例 Audio 元素全生命周期复用，切换视图不中断播放 |
 
-`usePlayer.js` 核心：歌曲清单来自 `music.jsonl`（构建期由 Python 脚本从 QQ 音乐歌单拉取），播放时实时调 MetingJS API 解析音频 URL（有 30 分钟缓存 + 失效自动重试）。歌词同步由 `useLyrics.js` 处理。
+`usePlayer.js` 核心：歌曲清单来自 `music.jsonl`（构建期由 Node.js 脚本从 QQ 音乐歌单拉取），播放时实时调 MetingJS API 解析音频 URL（有 30 分钟缓存 + 失效自动重试）。歌词同步由 `useLyrics.js` 处理。
 
 ### 数据生成（构建期）
 
 | 脚本/插件 | 语言 | 选型理由 |
 |-----------|------|----------|
-| `parse-qq-playlist.py` | Python 3 标准库 | QQ 音乐 API 返回 JSONP/JSON，Python 标准库 `urllib` 即可处理，无需第三方依赖 |
+| `parse-qq-playlist.mjs` | Node.js ESM | QQ 音乐歌单解析（全量字段 + 封面 URL 构造 + 歌单信息） |
 | `gen-feed.mjs` | Node.js ESM | 日志合并逻辑简单，用 Node 原生 `fs` 即可，与 Vite 插件同进程调用 |
 | `md-meta.mjs` | Node.js ESM | Markdown 元数据提取（标题/日期/摘要/分类/字数），正则解析，无需 remark/front-matter 库 |
 | `manifestPlugin()` | Vite 插件 | 通用文件扫描器，参数化配置 dir/outFile/urlBase/test/mapItem，复用于相册和笔记 |
@@ -253,7 +253,7 @@ AppHeader.vue 的导航菜单项 key 必须与 App.vue 的 `v-else-if` 匹配。
 |------|------|----------|
 | `AMAP_API_KEY` | 高德地图 Key | EdgeOne 云端构建注入，`define` 烘焙进产物 |
 | `QQ_PLAYLIST_ID` | QQ 音乐歌单 ID | 可选，默认 `7813925785` |
-| `HTTP_PROXY` / `HTTPS_PROXY` | 代理 | Python 脚本读取，默认 `http://127.0.0.1:18080` |
+| || |
 
 ## 常见注意事项
 
