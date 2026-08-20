@@ -9,6 +9,15 @@ description: "Control Motrix download manager to monitor, speed up, and manage d
 
 This skill wraps the local **Motrix** download manager CLI (`motrix`) to help AI agents manage file downloads. Motrix uses **aria2** as its download engine, which provides significantly faster download speeds than browser-based downloads through multi-connection downloading, segmented transfers, and BT/magnet support.
 
+## Default Paths
+
+| 用途 | 路径 |
+|------|------|
+| **文件下载路径** | `$HOME\Downloads`（PowerShell: `$env:USERPROFILE\Downloads`） |
+| **文件安装路径** | `C:\Program Files` |
+
+> 除非用户明确指定，否则所有下载文件默认保存到 `$HOME\Downloads`，软件默认安装到 `C:\Program Files`。
+
 ## Tool Location
 
 ```

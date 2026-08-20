@@ -6,6 +6,17 @@ Control the local **Motrix** download manager via CLI to hand off slow browser d
 
 ---
 
+## Default Paths
+
+| Purpose | Path |
+|---------|------|
+| **Download path** | `$HOME\Downloads` (PowerShell: `$env:USERPROFILE\Downloads`) |
+| **Install path** | `C:\Program Files` |
+
+> Unless the user specifies otherwise, all downloaded files default to `$HOME\Downloads`, and software installs to `C:\Program Files`.
+
+---
+
 ## Naming
 
 This skill is named `motrix-download`, directly reflecting its core purpose: **managing download tasks via Motrix**.

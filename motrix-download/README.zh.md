@@ -12,6 +12,17 @@
 
 ---
 
+## 默认路径
+
+| 用途 | 路径 |
+|------|------|
+| **文件下载路径** | `$HOME\Downloads`（PowerShell: `$env:USERPROFILE\Downloads`） |
+| **文件安装路径** | `C:\Program Files` |
+
+> 除非用户明确指定，否则所有下载文件默认保存到 `$HOME\Downloads`，软件默认安装到 `C:\Program Files`。
+
+---
+
 ## 为什么需要它
 
 当用户在浏览器中下载大文件时，往往遇到以下问题：
