@@ -42,16 +42,33 @@ node -v
 npm -v
 ```
 
-Record the resolved absolute paths (used later):
+Record the resolved absolute paths (used later). **Resolve each independently** — node.exe
+and the global node_modules may live in different directory trees:
 
 ```powershell
-(Get-Command node).Source   # e.g. D:\Software\nodejs\node.exe
-npm root -g                 # e.g. D:\Software\nodejs\node_modules
+# Resolve the REAL node.exe (not a .cmd shim). On Windows, Get-Command may return a
+# shim like %APPDATA%\npm\node.cmd — resolve its target instead.
+$nodeExe = (Get-Command node -ErrorAction SilentlyContinue).Source
+if ($nodeExe -and $nodeExe -match '\.cmd$|\.bat$') {
+    # Shim: parse the actual target from the shim file, or fall back to where.exe
+    $nodeExe = (where.exe node 2>$null | Where-Object { $_ -match '\.exe$' } | Select-Object -First 1)
+}
+if (-not $nodeExe) { Write-Error "node.exe not found in PATH"; exit 1 }
+
+# Resolve the global node_modules root — always use npm's own report
+$dshRoot = (npm root -g).Trim()
+$dshBin  = Join-Path $dshRoot "@deepseek-ai\dsh\lib\bin.js"
+
+# Verify both exist
+Test-Path $nodeExe          # node.exe must exist
+Test-Path $dshBin           # dsh bin must exist
 ```
 
-> Note: machine PATH may contain several node/npm shims (e.g. under Python directories or
-> a per-user npm). For the scheduled task always use absolute paths from
-> `(Get-Command node).Source` and the global dsh bin, never bare `npx`/`node`.
+> **Why separate?** On Windows, a per-user npm install may put shims in
+> `%APPDATA%\npm\` while the real node lives in `C:\Program Files\nodejs\`. Meanwhile
+> `npm root -g` reports the actual global modules directory, which may differ from
+> the node.exe parent. Never assume they share a parent — always resolve each
+> independently and verify with `Test-Path`.
 
 ## Step 2 — Install dsh globally
 
@@ -75,17 +92,47 @@ $dshBin  = "$dshRoot\@deepseek-ai\dsh\lib\bin.js"
 Test-Path $dshBin          # bin field maps "dsh" -> "lib/bin.js"
 ```
 
+### Ensure `dsh` is on the system PATH
+
+After `npm i -g`, npm creates a shim (`dsh.cmd` / `dsh.ps1`) in the npm prefix bin
+directory (e.g. `C:\Program Files\nodejs\`). If that directory is not on the system
+PATH, `dsh web` won't work from a plain command prompt or the scheduled task.
+
+```powershell
+# Check if `dsh` resolves from PATH
+$null = Get-Command dsh -ErrorAction SilentlyContinue
+if (-not $?) {
+    # Find npm's global bin directory
+    $npmBin = (npm config get prefix)
+    # Add to system PATH (requires admin) — persists across reboots
+    $currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    if ($currentPath -notlike "*$npmBin*") {
+        [Environment]::SetEnvironmentVariable("Path", "$currentPath;$npmBin", "Machine")
+        $env:Path = "$env:Path;$npmBin"
+        Write-Host "Added $npmBin to system PATH"
+    }
+}
+```
+
+> **Scheduled task note:** The `SYSTEM` account uses the **machine** PATH, not the user
+> PATH. Always modify the machine PATH via `[Environment]::SetEnvironmentVariable(..., "Machine")`,
+> never the user PATH, or the scheduled task won't find `dsh`.
+
 Sanity-check it can serve the browser UI:
 
 ```powershell
-& "$dshBin" --version
-& "$dshBin" --profile web --help
+dsh --version              # use the PATH shim, not the full bin path
+dsh --profile web --help
 ```
 
 ## Step 3 — Auto-start wrapper script
 
-Use `scripts/start-dsh-web.ps1` from this repo (see below). It (a) skips if the port is
-already served (e.g. the service was started manually) and (b) restarts on crash.
+Use `scripts/start-dsh-web.ps1` from this repo (see below). It:
+
+1. **Skips** if the port is already served (e.g. the service was started manually).
+2. **Restarts on crash** with exponential backoff (5s → 10s → 20s → 40s → 80s, capped at 5 min).
+3. **Does NOT restart** on graceful exit (exit code 0) — so manual stops are respected.
+4. **Gives up** after 5 consecutive crashes and logs "Manual intervention required."
 
 > **PowerShell gotcha:** `$Host` is a read-only automatic variable. Never name your bind
 > variable `$Host`; use e.g. `$BindHost`.
@@ -130,6 +177,25 @@ netstat -ano | findstr :3080
 > session's manual `npx`), the wrapper logs `port ... already in use, skipping.` and exits,
 > which is **correct** — a real boot has no such instance, so it launches.
 
+## Crash Restart Behavior
+
+The wrapper uses **exponential backoff** to avoid tight restart loops:
+
+| Retry | Delay | Total wait |
+|-------|-------|------------|
+| 1     | 5s    | 5s         |
+| 2     | 10s   | 15s        |
+| 3     | 20s   | 35s        |
+| 4     | 40s   | 75s        |
+| 5     | 80s   | 155s       |
+| fail  | —     | gives up   |
+
+- **Exit code 0** (graceful shutdown) → no restart, loop exits cleanly.
+- **Exit code ≠ 0** (crash) → restart with backoff, up to 5 attempts.
+- **5 crashes in a row** → gives up, logs `"Manual intervention required"`, exits with code 1.
+
+To adjust: edit `$maxRetries` and `$baseDelay` at the top of `start-dsh-web.ps1`.
+
 ## Troubleshooting
 
 - **`EADDRINUSE`: address already in use** → another instance already serves the port.
@@ -138,6 +204,11 @@ netstat -ano | findstr :3080
   `Run As User: SYSTEM`, `Schedule Type: At system start up`.
 - **`powershell -File` cannot run `.cmd`?** → point the task at a `.ps1`, not `.cmd`.
 - **Wrong Node picked up** → set absolute `$Node` path; do not rely on PATH.
+- **Service keeps restarting** → check the log for exit codes. If you see "max retries reached",
+  investigate the root cause (Node.js version mismatch, corrupted dsh install, port conflict).
+- **Service stopped after manual `dsh web` exit** → this is correct behavior. Exit code 0 means
+  "graceful shutdown" and the wrapper intentionally does not restart. Use the scheduled task
+  to start it again at next boot, or run `schtasks /Run /TN "DeepSeekHarnessWeb"`.
 
 ## Files
 

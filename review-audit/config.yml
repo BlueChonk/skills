@@ -1,0 +1,14 @@
+# review-audit skill — configuration
+#
+# output_language:
+#   The language of the audit REPORT — findings prose, coverage-table labels,
+#   the verdict, and narrative. Code, commands, file:line locations,
+#   grep/exec output, slugs, and technical terms always stay in English
+#   regardless of this value.
+#
+#     auto   Match the language of the conversation / target project. (default)
+#     ja     Always Japanese.
+#     en     Always English.
+#
+# To change it, edit the value below and start a new Claude Code session.
+output_language: auto
