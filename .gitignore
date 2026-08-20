@@ -1,0 +1,4 @@
+# Local editor runtime state (optional, not committed)
+*.log
+# Temporary/upstream scratch clones
+.tmp*/

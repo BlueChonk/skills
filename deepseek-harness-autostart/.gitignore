@@ -1,0 +1,8 @@
+# Runtime logs
+logs/
+*.log
+
+# OS cruft
+Thumbs.db
+Desktop.ini
+.DS_Store
