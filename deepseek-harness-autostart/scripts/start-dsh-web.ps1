@@ -1,7 +1,10 @@
-# DeepSeek Harness browser UI (dsh web) — boot auto-start wrapper.
+# DeepSeek Harness browser UI (dsh web) — user logon auto-start wrapper.
 #
 # Windows only. Skips if the port is already served; otherwise launches `dsh web`
 # and automatically restarts it after a crash with exponential backoff.
+#
+# Runs under the logged-in user account (ONLOGON) so dsh stores its data in
+# the user's %APPDATA%\dsh-desktop\ directory, preserving existing sessions.
 #
 # EXIT CODE POLICY:
 #   - dsh exits 0       → graceful shutdown, do NOT restart (break loop)

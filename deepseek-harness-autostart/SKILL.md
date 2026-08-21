@@ -17,8 +17,8 @@ Recreate this end-to-end flow:
 1. Check/install **Node.js** (and npm) at a version satisfying `deepseek-harness`'s
    `package.json` `engines.node`.
 2. Install the **`@deepseek-ai/dsh`** CLI globally (this is what `npx @deepseek-ai/dsh web` runs).
-3. Create a **boot auto-start** scheduled task so `dsh web` serves the browser UI at every
-   system start, with automatic crash restart.
+3. Create a **user logon auto-start** scheduled task so `dsh web` serves the browser UI at
+   every user logon, with automatic crash restart.
 
 ## Prerequisites
 
@@ -92,31 +92,23 @@ $dshBin  = "$dshRoot\@deepseek-ai\dsh\lib\bin.js"
 Test-Path $dshBin          # bin field maps "dsh" -> "lib/bin.js"
 ```
 
-### Ensure `dsh` is on the system PATH
+### Ensure `dsh` is on the PATH
 
 After `npm i -g`, npm creates a shim (`dsh.cmd` / `dsh.ps1`) in the npm prefix bin
-directory (e.g. `C:\Program Files\nodejs\`). If that directory is not on the system
-PATH, `dsh web` won't work from a plain command prompt or the scheduled task.
+directory. Verify it's accessible:
 
 ```powershell
-# Check if `dsh` resolves from PATH
 $null = Get-Command dsh -ErrorAction SilentlyContinue
 if (-not $?) {
-    # Find npm's global bin directory
     $npmBin = (npm config get prefix)
-    # Add to system PATH (requires admin) — persists across reboots
-    $currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    # Add to user PATH (persists across reboots)
+    $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
     if ($currentPath -notlike "*$npmBin*") {
-        [Environment]::SetEnvironmentVariable("Path", "$currentPath;$npmBin", "Machine")
-        $env:Path = "$env:Path;$npmBin"
-        Write-Host "Added $npmBin to system PATH"
+        [Environment]::SetEnvironmentVariable("Path", "$currentPath;$npmBin", "User")
+        Write-Host "Added $npmBin to user PATH"
     }
 }
 ```
-
-> **Scheduled task note:** The `SYSTEM` account uses the **machine** PATH, not the user
-> PATH. Always modify the machine PATH via `[Environment]::SetEnvironmentVariable(..., "Machine")`,
-> never the user PATH, or the scheduled task won't find `dsh`.
 
 Sanity-check it can serve the browser UI:
 
@@ -137,22 +129,28 @@ Use `scripts/start-dsh-web.ps1` from this repo (see below). It:
 > **PowerShell gotcha:** `$Host` is a read-only automatic variable. Never name your bind
 > variable `$Host`; use e.g. `$BindHost`.
 
-## Step 4 — Register boot auto-start scheduled task
+## Step 4 — Register user logon auto-start scheduled task
 
-Create the task to run **at system startup** under the `SYSTEM` account with highest
-privileges:
+Create the task to run **at user logon** under the current user account. This ensures
+`dsh web` uses the correct data directory at `$HOME\AppData\Roaming\dsh-desktop\`:
 
 ```powershell
 schtasks /Create /TN "DeepSeekHarnessWeb" `
   /TR "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File D:\deepseek-harness-autostart-skill\scripts\start-dsh-web.ps1" `
-  /SC ONSTART /RU SYSTEM /RL HIGHEST /F
+  /SC ONLOGON /RL HIGHEST /F
 ```
+
+> **Why ONLOGON instead of ONSTART?** `dsh web` stores session data in the user's
+> `%APPDATA%\dsh-desktop\` directory. Running as `SYSTEM` (ONSTART) creates a separate
+> empty data directory under `%SystemRoot%\System32\config\systemprofile\AppData\`,
+> making all previous data appear lost. ONLOGON runs as the logged-in user, preserving
+> the correct data path.
 
 To re-point an existing task at an updated script:
 
 ```powershell
 schtasks /Change /TN "DeepSeekHarnessWeb" /TR "..."
-```
+"
 
 ### Manual test & verify
 
@@ -200,8 +198,8 @@ To adjust: edit `$maxRetries` and `$baseDelay` at the top of `start-dsh-web.ps1`
 
 - **`EADDRINUSE`: address already in use** → another instance already serves the port.
   Either keep it or stop it, then re-test. The `Test-NetConnection` guard prevents log spam.
-- **Task never fires at boot** → confirm `Status: Ready`, `Scheduled Task State: Enabled`,
-  `Run As User: SYSTEM`, `Schedule Type: At system start up`.
+- **Task never fires at logon** → confirm `Status: Ready`, `Scheduled Task State: Enabled`,
+  `Schedule Type: At logon`.
 - **`powershell -File` cannot run `.cmd`?** → point the task at a `.ps1`, not `.cmd`.
 - **Wrong Node picked up** → set absolute `$Node` path; do not rely on PATH.
 - **Service keeps restarting** → check the log for exit codes. If you see "max retries reached",
